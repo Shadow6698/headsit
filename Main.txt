@@ -1,0 +1,345 @@
+-- HeadSit GUI Mobile Script para Roblox
+-- Permite sentar na cabeça de outros players
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Variáveis para controle do HeadSit
+local isHeadSitting = false
+local targetPlayer = nil
+local headSitConnection = nil
+local currentSeat = nil
+
+-- Criar ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "HeadSitGUI"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+-- Frame principal (móvel)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 200)
+mainFrame.Position = UDim2.new(0.5, -150, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true -- Permite mover no mobile
+mainFrame.Parent = screenGui
+
+-- Corner arredondado
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+-- Barra de título
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 40)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+-- Título
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, -10, 1, 0)
+titleLabel.Position = UDim2.new(0, 5, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🪑 HeadSit Mobile"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextScaled = true
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = titleBar
+
+-- TextBox para nick do player
+local playerTextBox = Instance.new("TextBox")
+playerTextBox.Name = "PlayerTextBox"
+playerTextBox.Size = UDim2.new(1, -20, 0, 35)
+playerTextBox.Position = UDim2.new(0, 10, 0, 50)
+playerTextBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+playerTextBox.BorderSizePixel = 0
+playerTextBox.Text = "Nome do Player..."
+playerTextBox.PlaceholderText = "Digite o nick (pode ser parcial)"
+playerTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+playerTextBox.TextScaled = true
+playerTextBox.Font = Enum.Font.Gotham
+playerTextBox.ClearTextOnFocus = true
+playerTextBox.Parent = mainFrame
+
+local textBoxCorner = Instance.new("UICorner")
+textBoxCorner.CornerRadius = UDim.new(0, 8)
+textBoxCorner.Parent = playerTextBox
+
+-- Botão HeadSit
+local headSitButton = Instance.new("TextButton")
+headSitButton.Name = "HeadSitButton"
+headSitButton.Size = UDim2.new(0.45, 0, 0, 40)
+headSitButton.Position = UDim2.new(0, 10, 0, 100)
+headSitButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+headSitButton.BorderSizePixel = 0
+headSitButton.Text = "🪑 HeadSit"
+headSitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+headSitButton.TextScaled = true
+headSitButton.Font = Enum.Font.GothamBold
+headSitButton.Parent = mainFrame
+
+local headSitCorner = Instance.new("UICorner")
+headSitCorner.CornerRadius = UDim.new(0, 8)
+headSitCorner.Parent = headSitButton
+
+-- Botão UnHeadSit
+local unHeadSitButton = Instance.new("TextButton")
+unHeadSitButton.Name = "UnHeadSitButton"
+unHeadSitButton.Size = UDim2.new(0.45, 0, 0, 40)
+unHeadSitButton.Position = UDim2.new(0.55, 0, 0, 100)
+unHeadSitButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+unHeadSitButton.BorderSizePixel = 0
+unHeadSitButton.Text = "❌ UnHeadSit"
+unHeadSitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+unHeadSitButton.TextScaled = true
+unHeadSitButton.Font = Enum.Font.GothamBold
+unHeadSitButton.Parent = mainFrame
+
+local unHeadSitCorner = Instance.new("UICorner")
+unHeadSitCorner.CornerRadius = UDim.new(0, 8)
+unHeadSitCorner.Parent = unHeadSitButton
+
+-- Label de status
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(1, -20, 0, 30)
+statusLabel.Position = UDim2.new(0, 10, 0, 150)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Pronto para usar!"
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = mainFrame
+
+-- Função para encontrar player por nome parcial
+local function findPlayer(partialName)
+    partialName = partialName:lower()
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Name:lower():find(partialName) then
+            return otherPlayer
+        end
+    end
+    return nil
+end
+
+-- Função para fazer HeadSit
+local function doHeadSit(targetPlayerObj)
+    if not targetPlayerObj or not targetPlayerObj.Character or not targetPlayerObj.Character:FindFirstChild("Head") then
+        statusLabel.Text = "Player não encontrado ou sem personagem!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return
+    end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("Humanoid") or not character:FindFirstChild("HumanoidRootPart") then
+        statusLabel.Text = "Seu personagem não está disponível!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return
+    end
+    
+    local humanoid = character.Humanoid
+    
+    -- Criar um Seat invisível temporário para ativar a animação de sentar
+    local seat = Instance.new("Seat")
+    seat.Name = "HeadSitSeat"
+    seat.Size = Vector3.new(0.1, 0.1, 0.1)
+    seat.Transparency = 1
+    seat.CanCollide = false
+    seat.Anchored = true
+    seat.Parent = workspace
+    currentSeat = seat
+    
+    -- Posicionar o seat e fazer o player sentar nele
+    seat.CFrame = character.HumanoidRootPart.CFrame
+    humanoid.Sit = true
+    seat:Sit(humanoid)
+    
+    -- Aguardar a animação de sentar ser ativada
+    wait(0.2)
+    
+    -- Salvar referência do player alvo
+    targetPlayer = targetPlayerObj
+    isHeadSitting = true
+    
+    statusLabel.Text = "HeadSit ativo em " .. targetPlayer.Name
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    
+    -- Loop para manter na cabeça
+    headSitConnection = RunService.Heartbeat:Connect(function()
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Head") and 
+           character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("Humanoid") then
+            
+            local headCFrame = targetPlayer.Character.Head.CFrame
+            -- Posicionar em cima da cabeça, sentado
+            local sitPosition = headCFrame * CFrame.new(0, 1.8, 0)
+            
+            -- Mover o seat junto (para manter a animação)
+            if currentSeat and currentSeat.Parent then
+                currentSeat.CFrame = sitPosition
+            end
+            
+            -- FORÇAR posição do player na cabeça também
+            character.HumanoidRootPart.CFrame = sitPosition
+            
+            -- Zerar velocidades para estabilizar
+            character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+            character.HumanoidRootPart.AngularVelocity = Vector3.new(0, 0, 0)
+        else
+            -- Se o player sumiu, desfazer headsit
+            if currentSeat and currentSeat.Parent then
+                currentSeat:Destroy()
+                currentSeat = nil
+            end
+            unHeadSit()
+        end
+    end)
+end
+
+-- Função para desfazer HeadSit
+function unHeadSit()
+    if headSitConnection then
+        headSitConnection:Disconnect()
+        headSitConnection = nil
+    end
+    
+    -- Remover o seat invisível
+    if currentSeat and currentSeat.Parent then
+        currentSeat:Destroy()
+        currentSeat = nil
+    end
+    
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart") then
+        local humanoid = character.Humanoid
+        
+        -- Forçar saída do estado sentado
+        humanoid.Sit = false
+        humanoid.PlatformStand = false
+        humanoid.Jump = true
+        
+        -- Teleportar para próximo do player alvo ao invés de posição original
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local targetPosition = targetPlayer.Character.HumanoidRootPart.CFrame
+            -- Posicionar ao lado do player, no chão
+            local newPosition = targetPosition * CFrame.new(3, 0, 0) -- 3 studs ao lado
+            character.HumanoidRootPart.CFrame = newPosition
+        end
+        
+        -- Aguardar um frame e dar um pequeno pulo para "soltar"
+        wait(0.1)
+        humanoid.Jump = true
+    end
+    
+    isHeadSitting = false
+    targetPlayer = nil
+    
+    statusLabel.Text = "HeadSit removido!"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    
+    wait(2)
+    statusLabel.Text = "Pronto para usar!"
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+end
+
+-- Eventos dos botões
+headSitButton.MouseButton1Click:Connect(function()
+    if isHeadSitting then
+        statusLabel.Text = "Já está fazendo HeadSit!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        return
+    end
+    
+    local playerName = playerTextBox.Text:gsub("%s+", "")
+    if playerName == "" or playerName == "Nome do Player..." then
+        statusLabel.Text = "Digite o nome do player!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return
+    end
+    
+    local foundPlayer = findPlayer(playerName)
+    if foundPlayer then
+        doHeadSit(foundPlayer)
+    else
+        statusLabel.Text = "Player '" .. playerName .. "' não encontrado!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+unHeadSitButton.MouseButton1Click:Connect(function()
+    if not isHeadSitting then
+        statusLabel.Text = "Não está fazendo HeadSit!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        return
+    end
+    unHeadSit()
+end)
+
+-- Detectar pulo para sair do HeadSit
+UserInputService.JumpRequest:Connect(function()
+    if isHeadSitting then
+        unHeadSit()
+    end
+end)
+
+-- Efeitos visuais nos botões
+local function createButtonEffect(button, hoverColor, clickColor)
+    local originalColor = button.BackgroundColor3
+    
+    button.MouseEnter:Connect(function()
+        if not button.Parent then return end
+        local tween = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor})
+        tween:Play()
+    end)
+    
+    button.MouseLeave:Connect(function()
+        if not button.Parent then return end
+        local tween = TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = originalColor})
+        tween:Play()
+    end)
+    
+    button.MouseButton1Down:Connect(function()
+        if not button.Parent then return end
+        local tween = TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = clickColor})
+        tween:Play()
+    end)
+    
+    button.MouseButton1Up:Connect(function()
+        if not button.Parent then return end
+        local tween = TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = originalColor})
+        tween:Play()
+    end)
+end
+
+-- Aplicar efeitos nos botões
+createButtonEffect(headSitButton, Color3.fromRGB(0, 200, 0), Color3.fromRGB(0, 140, 0))
+createButtonEffect(unHeadSitButton, Color3.fromRGB(200, 0, 0), Color3.fromRGB(140, 0, 0))
+
+-- Limpeza quando o player sai
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if targetPlayer == leavingPlayer then
+        unHeadSit()
+    end
+end)
+
+print("HeadSit GUI Mobile carregado com sucesso!")
+print("- Digite o nome (ou parte do nome) do player")
+print("- Clique em 'HeadSit' para sentar na cabeça")
+print("- Clique em 'UnHeadSit' ou pule para sair")
+print("- A GUI é arrastável para reposicionar")
